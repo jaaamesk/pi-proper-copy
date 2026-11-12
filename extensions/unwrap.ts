@@ -31,19 +31,25 @@ export interface UnwrapOptions {
 	width: number;
 	/** Whether the selection includes screen column 0 (and thus the layout gutter). */
 	fromColumnZero: boolean;
+	/** Whether the selection reaches the right edge of the screen. */
+	edgeReached: boolean;
 }
 
 /**
  * Rebuild selection text with visual (soft) wraps removed.
  *
- * A rendered line can only end in a visual wrap if it was filled to the right
- * edge of the screen, so a line that reached the edge is joined with the next
- * line; anything shorter kept its real newline. The edge test is deliberately
- * conservative: a line one cell short of the edge is ambiguous (a real line
- * that exactly fits, or a wrap on a space) and keeps its break. Structural
- * lines (headings, lists, fences, quotes, tables, rules) always keep theirs.
+ * The transcript content area is narrower than the screen (left/right
+ * padding, scrollbars), so the width of a filled line is measured from the
+ * selection itself instead of the terminal: when the selection reaches the
+ * right edge, the longest selected line is a full-width line, and any line
+ * within one cell of it (a wrap that fell on a space) was also a visual wrap.
+ * Shorter lines kept real newlines and stay untouched. Structural lines
+ * (headings, lists, fences, quotes, tables, rules) always keep their break.
+ *
+ * Selections that do not reach the right edge are left as-is: their line
+ * widths are slices, not true line widths, so nothing can be trusted.
  */
-export function properCopy(text: string, { width, fromColumnZero }: UnwrapOptions): string {
+export function properCopy(text: string, { width, fromColumnZero, edgeReached }: UnwrapOptions): string {
 	let lines = text.split("\n").map((line) => line.trimEnd());
 
 	// The transcript is rendered with a small left gutter. When the selection
@@ -61,7 +67,14 @@ export function properCopy(text: string, { width, fromColumnZero }: UnwrapOption
 
 	if (!Number.isFinite(width) || width < 10) return lines.join("\n");
 
-	const fullAtEdge = width - 1;
+	const widths = lines.map((line) => visibleWidth(line));
+	const maxWidth = Math.max(0, ...widths);
+	const contentWidth = width - 2;
+	// Only trust measured widths when the selection spans to the right edge and
+	// the longest line is plausibly a filled content line (not a narrow slice).
+	if (!edgeReached || maxWidth < contentWidth * 0.9) return lines.join("\n");
+
+	const fullAt = maxWidth - 1;
 	const out: string[] = [lines[0] ?? ""];
 	for (let i = 1; i < lines.length; i++) {
 		const left = lines[i - 1];
@@ -70,7 +83,7 @@ export function properCopy(text: string, { width, fromColumnZero }: UnwrapOption
 			left.trim() !== "" &&
 			right.trim() !== "" &&
 			!STRUCTURAL_START.test(right) &&
-			visibleWidth(left) >= fullAtEdge;
+			widths[i - 1] >= fullAt;
 		if (isWrap) {
 			out[out.length - 1] += joinerFor(left, right) + right.trimStart();
 		} else {

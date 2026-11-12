@@ -24,6 +24,9 @@ function installSelectionFix(): () => void {
 			return properCopy(text, {
 				width,
 				fromColumnZero: bounds ? bounds.start.col === 0 : false,
+				// The selection ends within 2 columns of the screen edge (allowing
+				// for boundary semantics and a scrollbar column).
+				edgeReached: width > 0 && bounds ? bounds.end.col >= width - 2 : false,
 			});
 		} catch {
 			// Never break a copy over a normalization error.

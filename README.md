@@ -16,15 +16,16 @@ In fullscreen mode Pi owns text selection: copies go through
 normalizes the result — no Pi files are modified, and the original session
 content is never touched. Only the text that reaches the clipboard changes.
 
-Unlike heuristic-only approaches, it uses a geometric fact: a rendered line
-can only have been visually wrapped if it was filled to the right edge of the
-screen. Pi knows its own screen width (`previousScreenWidth`), so:
-
-- a line that reached the edge was a wrap → join it with the next line,
-- a shorter line kept its real newline → it stays,
-- a line one cell short of the edge is ambiguous (a real line that exactly
-  fits, or a wrap on a space) → it keeps the break, so copies are never
-  corrupted.
+It uses a geometric fact: a rendered line can only have been visually wrapped
+if it was filled to the right edge of the content area. The content area is
+narrower than the terminal (layout padding), so instead of assuming a width,
+it measures it: when a selection reaches the right edge, the longest line in
+the selection *is* a full line, and any line within one cell of it (a wrap
+that fell on a space) was a visual wrap too. Everything else kept its real
+newline and is untouched. The screen width (`previousScreenWidth`, which Pi
+updates on every render, including resizes) is only used to verify that the
+selection actually reached the right edge and that the lines are plausibly
+full-width — so terminal resizing works without any reconfiguration.
 
 Joining is done carefully:
 
