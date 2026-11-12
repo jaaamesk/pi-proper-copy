@@ -1,0 +1,42 @@
+{
+	"name": "pi-proper-copy",
+	"version": "0.1.0",
+	"description": "Pi extension that copies clean text from the fullscreen TUI by removing visual (soft) wraps before text reaches the clipboard",
+	"type": "module",
+	"license": "MIT",
+	"author": "James K",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/jaaamesk/pi-proper-copy.git"
+	},
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"clipboard",
+		"copy",
+		"soft-wrap",
+		"terminal",
+		"tui",
+		"fullscreen"
+	],
+	"files": [
+		"extensions",
+		"README.md",
+		"LICENSE"
+	],
+	"scripts": {
+		"test": "node --experimental-strip-types --test test/*.test.ts"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-tui": "^1.5.2"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-tui": "*"
+	},
+	"pi": {
+		"extensions": [
+			"./extensions/index.ts"
+		]
+	}
+}
