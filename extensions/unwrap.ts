@@ -31,26 +31,31 @@ export interface UnwrapOptions {
 	width: number;
 	/** Whether the selection includes screen column 0 (and thus the layout gutter). */
 	fromColumnZero: boolean;
-	/** Whether the selection reaches the right edge of the screen. */
-	edgeReached: boolean;
+	/** Screen column where the selection starts (mid-line starts cut the first row). */
+	startCol: number;
 }
 
 /**
  * Rebuild selection text with visual (soft) wraps removed.
  *
- * The transcript content area is narrower than the screen (left/right
- * padding, scrollbars), so the width of a filled line is measured from the
- * selection itself instead of the terminal: when the selection reaches the
- * right edge, the longest selected line is a full-width line, and any line
- * within one cell of it (a wrap that fell on a space) was also a visual wrap.
- * Shorter lines kept real newlines and stay untouched. Structural lines
- * (headings, lists, fences, quotes, tables, rules) always keep their break.
+ * The decision uses the renderer's own rule: a row was visually wrapped
+ * exactly when the first word of the next row did not fit on it, i.e.
+ * `lineWidth + 1 + firstWordWidth > wrapWidth`. A break where the next word
+ * would have fit is a real source newline and is kept. The wrap width is
+ * measured from the widest selected row (every row except the selection's
+ * last one, which is always a fragment), so it adapts to padding, resizes,
+ * and per-user layout settings.
  *
- * Selections that do not reach the right edge are left as-is: their line
- * widths are slices, not true line widths, so nothing can be trusted.
+ * Widths are only trusted when some row reaches (near) the screen edge:
+ * otherwise they may come from a horizontal slice or from a narrow scroll box
+ * whose inner width cannot be observed, and joining would be guessing.
  */
-export function properCopy(text: string, { width, fromColumnZero, edgeReached }: UnwrapOptions): string {
+export function properCopy(
+	text: string,
+	{ width, fromColumnZero, startCol }: UnwrapOptions,
+): string {
 	let lines = text.split("\n").map((line) => line.trimEnd());
+	if (lines.length < 2) return lines.join("\n");
 
 	// The transcript is rendered with a small left gutter. When the selection
 	// starts at column 0 every non-blank line carries it, so drop the shared
@@ -65,27 +70,29 @@ export function properCopy(text: string, { width, fromColumnZero, edgeReached }:
 		}
 	}
 
-	if (!Number.isFinite(width) || width < 10) return lines.join("\n");
-
 	const widths = lines.map((line) => visibleWidth(line));
-	const maxWidth = Math.max(0, ...widths);
-	const contentWidth = width - 2;
-	// Only trust measured widths when the selection spans to the right edge and
-	// the longest line is plausibly a filled content line (not a narrow slice).
-	if (!edgeReached || maxWidth < contentWidth * 0.9) return lines.join("\n");
+	// A selection starting mid-line cuts the prefix off the first row, so the
+	// fragment underestimates that row's true rendered width.
+	if (widths[0] !== undefined) widths[0] += Math.max(0, startCol);
+	let wrapWidth = 0;
+	for (let i = 0; i < lines.length - 1; i++) wrapWidth = Math.max(wrapWidth, widths[i] ?? 0);
 
-	const fullAt = maxWidth - 1;
+	if (wrapWidth < 20) return lines.join("\n");
+	// Require a row near the screen edge so rows in a narrow scroll box (whose
+	// inner width cannot be observed here) are never joined.
+	if (width >= 12 && wrapWidth < width - 12) return lines.join("\n");
+
 	const out: string[] = [lines[0] ?? ""];
 	for (let i = 1; i < lines.length; i++) {
-		const left = lines[i - 1];
-		const right = lines[i];
-		const isWrap =
-			left.trim() !== "" &&
-			right.trim() !== "" &&
-			!STRUCTURAL_START.test(right) &&
-			widths[i - 1] >= fullAt;
-		if (isWrap) {
-			out[out.length - 1] += joinerFor(left, right) + right.trimStart();
+		const left = lines[i - 1] ?? "";
+		const right = lines[i] ?? "";
+		let joined = false;
+		if (left.trim() !== "" && right.trim() !== "" && !STRUCTURAL_START.test(right)) {
+			const firstWord = (right.trimStart().match(/^\S+/)?.[0] ?? "").length || 1;
+			joined = (widths[i - 1] ?? 0) + 1 + firstWord > wrapWidth;
+		}
+		if (joined) {
+			out[out.length - 1] = `${out[out.length - 1]}${joinerFor(left, right)}${right.trimStart()}`;
 		} else {
 			out.push(right);
 		}

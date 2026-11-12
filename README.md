@@ -16,16 +16,13 @@ In fullscreen mode Pi owns text selection: copies go through
 normalizes the result — no Pi files are modified, and the original session
 content is never touched. Only the text that reaches the clipboard changes.
 
-It uses a geometric fact: a rendered line can only have been visually wrapped
-if it was filled to the right edge of the content area. The content area is
-narrower than the terminal (layout padding), so instead of assuming a width,
-it measures it: when a selection reaches the right edge, the longest line in
-the selection *is* a full line, and any line within one cell of it (a wrap
-that fell on a space) was a visual wrap too. Everything else kept its real
-newline and is untouched. The screen width (`previousScreenWidth`, which Pi
-updates on every render, including resizes) is only used to verify that the
-selection actually reached the right edge and that the lines are plausibly
-full-width — so terminal resizing works without any reconfiguration.
+It uses the renderer's own wrapping rule. A row was visually wrapped exactly
+when the first word of the next row **did not fit** on it:
+`rowWidth + 1 + firstWordWidth > wrapWidth`. A break where the next word
+would have fit is a real source newline and is kept. The wrap width is
+measured from the widest row in the selection itself (never hard-coded), so
+it adapts to padding, resizes, and layout settings automatically. Selections
+that start mid-line are compensated by adding the cut-off prefix back.
 
 Joining is done carefully:
 
@@ -52,12 +49,18 @@ Restart Pi, then select and copy as usual.
 
 - **Fullscreen mode** (the Pi default). In regular mode the *terminal* owns
   mouse selections and no Pi extension can see them.
-- Applies to the main transcript. Selections inside nested scroll boxes
-  (e.g. expanded tool output) keep their wraps.
+- Selections inside narrow nested scroll boxes (e.g. expanded tool output)
+  are passed through unchanged when no row reaches near the screen edge,
+  since the box's inner width cannot be measured reliably.
+- An intentional hard line break inside prose directly before a long word
+  can still be joined (it is indistinguishable from a wrap) — the same
+  ambiguity every soft-wrap copy tool has.
 - Uses a Pi-internal method (`TuiAltScreen.getActiveSelectionText`), so a
   future Pi version that renames it needs a compatibility update. If that
   ever happens, copying simply degrades to today's behavior — it cannot break
-  copying.
+  copying. A one-line record is appended to `~/.pi/agent/pi-proper-copy.log`
+  on each load, so `tail -1 ~/.pi/agent/pi-proper-copy.log` verifies the
+  extension is active.
 
 ## Development
 
