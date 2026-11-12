@@ -36,14 +36,21 @@ Joining is done carefully:
 
 ## Install
 
+From GitHub:
+
 ```bash
-# from a clone of this repo
-echo "/path/to/pi-proper-copy" >> ~/.pi/agent/settings.json # add to "packages"
+pi install git:github.com/jaaamesk/pi-proper-copy@main
 ```
 
-or, once published: `pi install npm:pi-proper-copy`.
+From a local checkout: add the checkout's absolute path to the `packages`
+array in `~/.pi/agent/settings.json`, e.g.
 
-Restart Pi, then select and copy as usual.
+```json
+"packages": ["/home/you/pi_extensions/pi-proper-copy"]
+```
+
+Restart Pi, then select and copy as usual. Confirm the extension loaded:
+`tail -1 ~/.pi/agent/pi-proper-copy.log`.
 
 ## Requirements & limitations
 
